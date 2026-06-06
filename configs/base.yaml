@@ -1,0 +1,97 @@
+# Configuration for:
+#   Scalable deep reinforcement learning in the non-stationary capacitated
+#   lot sizing problem — Van Hezewijk, Dellaert, Van Jaarsveld (2025), IJPE 284:109601
+#
+# Every value is cited to a paper section/table or flagged [UNSPECIFIED].
+# Two experiment presets exist because the paper uses DIFFERENT cost params for the
+# stationary replication (§5.1) vs the non-stationary study (Table 4). See REPRODUCTION_NOTES.
+
+# ----------------------------------------------------------------------------------
+# Problem instance (default = non-stationary preset, Table 4)
+# ----------------------------------------------------------------------------------
+problem:
+  K: 5                  # §5.2.2 — number of products ∈ {5,10,15}
+  capacity_factor: 1.5  # §5.2.2 — f_c ∈ {1.5, 2.5}; capacity C = f_c · Σ_i μ_{i,0}
+  holding_cost: 1.0     # Table 4 — h_i = 1
+  backorder_cost: 9.0   # Table 4 — b_i = 9
+  setup_cost: 100.0     # Table 4 — k_i = 100   (NOTE: §5.1 stationary preset uses 200)
+  setup_time: 1         # Table 4 — θ_i = 1     (NOTE: §5.1 stationary preset uses 0)
+  horizon: 100          # §4.3 — finite non-stationary MDP, "at most 100 periods"
+  discount: 1.0         # [UNSPECIFIED] γ not stated; 1.0 matches "average cost per period" eval (§5.1)
+
+# ----------------------------------------------------------------------------------
+# Demand generating process (DGP)
+# ----------------------------------------------------------------------------------
+demand:
+  # [PARTIALLY_SPECIFIED] Exact DGP is van Hezewijk et al. (2023a), not given in THIS paper.
+  # §1/§6: "auto-regressive, discrete, non-negative, closely related to ARIMA(0,1,1)".
+  # We implement an IMA(0,1,1)-style level random walk + integerization. See src/demand.py.
+  mode: "nonstationary"   # "nonstationary" (DGP) or "stationary" (§5.1 discrete uniform)
+  mu0: 2.0                # Table 4 — initial mean demand μ_{i,0} = 2
+  cov0: 0.5               # §5.2.2 — initial coefficient of variation COV ∈ {0.5, 1.0}; σ_0 = COV·μ_0
+  alpha: 0.025            # §5.2.2 — degree of non-stationarity α ∈ {0, 0.025, 0.05}
+  # stationary-only (used when mode == "stationary", §5.1):
+  uniform_low: 3          # §5.1 — U{3,5} or U{0,8}
+  uniform_high: 5
+
+# ----------------------------------------------------------------------------------
+# Action space (§4.4)
+# ----------------------------------------------------------------------------------
+action:
+  # §4.4 Eq.6 — restricted second-stage quantity grid. Fine near 0, coarse for large q.
+  # {1..20, then step 2 to 40, step 5 to 60, step 10 to 100, step 20 to 200, step 100 up}.
+  # The actual upper bound is clipped to remaining capacity at runtime.
+  restricted_grid_spec: "1-20:1, 22-40:2, 45-60:5, 70-100:10, 120-200:20, 300-2000:100"
+
+# ----------------------------------------------------------------------------------
+# Rollout / AMBS baseline policy (§4.2, Algorithm 1)
+# ----------------------------------------------------------------------------------
+rollout:
+  # [UNSPECIFIED] §4.2 — "B_min, H_max, Z_max are found by searching a grid"; values not reported.
+  B_min: 2.0     # safety-stock multiplier on σ for the reorder level
+  H_max: 1.0     # order-up-to horizon multiplier
+  Z_max: 1       # max new setups per period. §4.1: "AMBS would allow only one new setup per period"
+  # Defaults above are reasonable starting points; use scripts grid-search to tune (stub provided).
+
+# ----------------------------------------------------------------------------------
+# Policy network (§4.3, Table 2)
+# ----------------------------------------------------------------------------------
+policy:
+  hidden_layers: [128, 128]  # Table 2 — [128,128] for K=5; use [256,256] for K∈{10,15}
+  activation: "relu"         # [UNSPECIFIED] §4.3 says "dense network"; activation not stated
+  # output dim is derived: |A1| + |restricted A2 grid| (Eq.7 unified action space)
+
+# ----------------------------------------------------------------------------------
+# DCL training (§4.1, Table 2)
+# ----------------------------------------------------------------------------------
+# Paper values (Table 2). They require a cluster (Table 6: hours of compute).
+# `*_demo` values run on a laptop CPU in minutes — used by default so the pipeline is
+# executable. Set use_paper_scale: true to restore the published numbers.
+dcl:
+  use_paper_scale: false
+  generations: 5            # Table 2 — 5 generations
+  # --- paper scale (Table 2) ---
+  N: 150000                 # Table 2 — sampled states (150k for K=5; 300k for K=10,15)
+  M: 1000                   # Table 2 — rollouts per action
+  H: 30                     # Table 2 — rollout horizon (periods)
+  # --- demo scale (laptop CPU) ---
+  N_demo: 2000
+  M_demo: 32
+  H_demo: 20
+  sequential_halving: true  # §4.1 — allocate rollout budget via Sequential Halving
+  common_random_numbers: true  # §4.1 — CRN: same demand draws across actions of a state
+  # NN training (per-generation supervised classification of best action, §4.1)
+  optimizer: "adam"         # [PARTIALLY_SPECIFIED] §4.1 "follow Temizöz et al. 2023 / DynaPlex"
+  lr: 0.001                 # [UNSPECIFIED] not stated; common Adam default
+  batch_size: 256           # [UNSPECIFIED] not stated
+  epochs_per_generation: 10 # [UNSPECIFIED] not stated
+
+# ----------------------------------------------------------------------------------
+# Evaluation (§5.1)
+# ----------------------------------------------------------------------------------
+evaluation:
+  n_runs: 10000   # §5.1 — 10,000 simulation runs ...
+  run_length: 100 # §5.1 — ... of 100 periods each
+  n_runs_demo: 200  # laptop default
+
+seed: 0           # [UNSPECIFIED] random seed not stated by the paper

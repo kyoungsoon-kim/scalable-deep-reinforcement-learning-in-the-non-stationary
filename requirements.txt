@@ -1,0 +1,7 @@
+# Scalable DRL in the non-stationary SCLSP — reproduction scaffold deps.
+# Pin major versions only.
+numpy>=1.24.0
+pyyaml>=6.0
+torch>=2.0.0   # policy network + DCL supervised training (src/policy.py, src/dcl.py)
+# Note (Windows): torch is installed only under `py -3.12` in this environment.
+# Run scripts with:  py -3.12 src/evaluate.py --train-dcl
