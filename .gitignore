@@ -13,6 +13,11 @@ env/
 *.pdf
 s2orc_out/
 
+# Paper-derived docs (excluded by request)
+PAPER_GUIDE.md
+REPRODUCTION_NOTES.md
+*_parsed.md
+
 # OS / editor
 .DS_Store
 Thumbs.db
